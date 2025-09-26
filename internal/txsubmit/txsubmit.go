@@ -1,0 +1,224 @@
+package txsubmit
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"log/slog"
+	"net"
+	"net/http"
+	"time"
+
+	"github.com/blinklabs-io/buidler-fest-2024-workshop/internal/config"
+	ouroboros "github.com/blinklabs-io/gouroboros"
+	"github.com/blinklabs-io/gouroboros/ledger"
+	"github.com/blinklabs-io/gouroboros/protocol/txsubmission"
+)
+
+var (
+	ntnTxBytes  []byte
+	ntnTxHash   [32]byte
+	ntnTxType   uint
+	ntnSentTx   bool
+	ntnDoneChan chan any
+)
+
+func SubmitTx(txBytes []byte) error {
+	cfg := config.GetConfig()
+	if cfg.Submit.Address != "" {
+		return submitTxNtN(txBytes)
+	} else if cfg.Submit.SocketPath != "" {
+		return submitTxNtC(txBytes)
+	} else if cfg.Submit.Url != "" {
+		slog.Info("using submitapi url")
+		return submitTxApi(txBytes)
+	} else {
+		// Populate address info from indexer network
+		network, ok := ouroboros.NetworkByName(cfg.Network)
+		if !ok {
+			return fmt.Errorf("unknown network: %s", cfg.Network)
+		}
+		if len(network.BootstrapPeers) == 0 {
+			return fmt.Errorf("no upstream configured for %s", cfg.Network)
+		}
+		peer := network.BootstrapPeers[0]
+		cfg.Submit.Address = fmt.Sprintf("%s:%d", peer.Address, peer.Port)
+		return submitTxNtN(txBytes)
+	}
+}
+
+func submitTxNtN(txBytes []byte) error {
+	cfg := config.GetConfig()
+
+	// Record TX bytes in global for use in handler functions
+	ntnTxBytes = txBytes[:]
+	ntnSentTx = false
+
+	// Determine transaction type (era)
+	txType, err := ledger.DetermineTransactionType(txBytes)
+	if err != nil {
+		return fmt.Errorf(
+			"could not parse transaction to determine type: %w",
+			err,
+		)
+	}
+	tx, err := ledger.NewTransactionFromCbor(txType, txBytes)
+	if err != nil {
+		return fmt.Errorf("failed to parse transaction CBOR: %w", err)
+	}
+	ntnTxHash = [32]byte(tx.Hash())
+	ntnTxType = txType
+
+	// Create connection
+	conn, err := createClientConnection(cfg.Submit.Address)
+	if err != nil {
+		return err
+	}
+	errorChan := make(chan error)
+	// Capture errors
+	go func() {
+		err, ok := <-errorChan
+		if ok {
+			panic(fmt.Errorf("async: %w", err))
+		}
+	}()
+	network, ok := ouroboros.NetworkByName(cfg.Network)
+	if !ok {
+		return fmt.Errorf("cannot get network: %s", cfg.Network)
+	}
+	oConn, err := ouroboros.New(
+		ouroboros.WithConnection(conn),
+		ouroboros.WithNetwork(network),
+		ouroboros.WithErrorChan(errorChan),
+		ouroboros.WithNodeToNode(true),
+		ouroboros.WithKeepAlive(true),
+		ouroboros.WithTxSubmissionConfig(
+			txsubmission.NewConfig(
+				txsubmission.WithRequestTxIdsFunc(handleRequestTxIds),
+				txsubmission.WithRequestTxsFunc(handleRequestTxs),
+			),
+		),
+	)
+	if err != nil {
+		return err
+	}
+
+	// Start txSubmission loop
+	ntnDoneChan = make(chan any)
+	oConn.TxSubmission().Client.Init()
+	<-ntnDoneChan
+	// Sleep 2s to allow time for TX to enter remote mempool before closing connection
+	time.Sleep(2 * time.Second)
+
+	if err := oConn.Close(); err != nil {
+		return fmt.Errorf("failed to close connection: %w", err)
+	}
+
+	// Log the transaction hash
+	slog.Info(fmt.Sprintf("transaction hash: %x", ntnTxHash))
+
+	return nil
+}
+
+func submitTxNtC(txBytes []byte) error {
+	// TODO
+	return nil
+}
+
+func submitTxApi(txBytes []byte) error {
+	cfg := config.GetConfig()
+	ctx := context.Background()
+	reqBody := bytes.NewBuffer(txBytes)
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		cfg.Submit.Url,
+		reqBody,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Add("Content-Type", "application/cbor")
+	client := &http.Client{Timeout: 5 * time.Minute}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to send request: %s: %w",
+			cfg.Submit.Url,
+			err,
+		)
+	}
+	if resp == nil {
+		return fmt.Errorf(
+			"failed parsing empty response from: %s",
+			cfg.Submit.Url,
+		)
+	}
+	// We have to read the entire response body and close it to prevent a memory leak
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted {
+		// Log the transaction hash from the response body
+		slog.Info(fmt.Sprintf("transaction hash: %s", string(respBody)))
+		return nil
+	} else {
+		return fmt.Errorf("failed to submit TX to API: %s: %d: %s", cfg.Submit.Url, resp.StatusCode, respBody)
+	}
+}
+
+func createClientConnection(nodeAddress string) (net.Conn, error) {
+	var err error
+	var conn net.Conn
+	var dialProto string
+	var dialAddress string
+	dialProto = "tcp"
+	dialAddress = nodeAddress
+	conn, err = net.Dial(dialProto, dialAddress)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
+func handleRequestTxIds(
+	ctx txsubmission.CallbackContext,
+	blocking bool,
+	ack uint16,
+	req uint16,
+) ([]txsubmission.TxIdAndSize, error) {
+	if ntnSentTx {
+		// Terrible synchronization hack for shutdown
+		close(ntnDoneChan)
+		time.Sleep(5 * time.Second)
+		return nil, nil
+	}
+	ret := []txsubmission.TxIdAndSize{
+		{
+			TxId: txsubmission.TxId{
+				EraId: uint16(ntnTxType), // #nosec G115
+				TxId:  ntnTxHash,
+			},
+			Size: uint32(len(ntnTxBytes)), // #nosec G115
+		},
+	}
+	return ret, nil
+}
+
+func handleRequestTxs(
+	ctx txsubmission.CallbackContext,
+	txIds []txsubmission.TxId,
+) ([]txsubmission.TxBody, error) {
+	ret := []txsubmission.TxBody{
+		{
+			EraId:  uint16(ntnTxType), // #nosec G115
+			TxBody: ntnTxBytes,
+		},
+	}
+	ntnSentTx = true
+	return ret, nil
+}
