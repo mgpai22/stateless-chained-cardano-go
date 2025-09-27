@@ -1,0 +1,14 @@
+network: ""
+
+submit:
+  address: ""
+  socket_path: ""
+  url: ""
+
+txbuilder:
+  blockfrost_api_key: ""
+  kupo_url: ""
+  cardano_monitor_url: ""
+
+wallet:
+  mnemonic: ""
