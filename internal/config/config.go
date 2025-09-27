@@ -15,18 +15,18 @@ type Config struct {
 	Submit    SubmitConfig    `yaml:"submit"`
 	TxBuilder TxBuilderConfig `yaml:"txbuilder"`
 	Wallet    WalletConfig    `yaml:"wallet"`
-	Network   string          `yaml:"network" envconfig:"NETWORK"`
+	Network   string          `yaml:"network"   envconfig:"NETWORK"`
 }
 
 type SubmitConfig struct {
-	Address    string `yaml:"address" envconfig:"SUBMIT_TCP_ADDRESS"`
+	Address    string `yaml:"address"     envconfig:"SUBMIT_TCP_ADDRESS"`
 	SocketPath string `yaml:"socket_path" envconfig:"SUBMIT_SOCKET_PATH"`
-	Url        string `yaml:"url" envconfig:"SUBMIT_URL"`
+	Url        string `yaml:"url"         envconfig:"SUBMIT_URL"`
 }
 
 type TxBuilderConfig struct {
-	BlockfrostApiKey  string `yaml:"blockfrost_api_key" envconfig:"BLOCKFROST_API_KEY"`
-	KupoUrl           string `yaml:"kupo_url" envconfig:"KUPO_URL"`
+	BlockfrostApiKey  string `yaml:"blockfrost_api_key"  envconfig:"BLOCKFROST_API_KEY"`
+	KupoUrl           string `yaml:"kupo_url"            envconfig:"KUPO_URL"`
 	CardanoMonitorUrl string `yaml:"cardano_monitor_url" envconfig:"CARDANO_MONITOR_URL"`
 }
 
@@ -42,7 +42,11 @@ var globalConfig = &Config{
 func LoadFromYAML(configPath string) (*Config, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config file %s: %w", configPath, err)
+		return nil, fmt.Errorf(
+			"failed to read config file %s: %w",
+			configPath,
+			err,
+		)
 	}
 
 	config := &Config{

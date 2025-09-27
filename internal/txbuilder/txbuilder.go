@@ -31,7 +31,10 @@ import (
 	"github.com/zenGate-Global/stateless/internal/wallet"
 )
 
-func BuildRewardTx(lovelace uint64, address string) (*Transaction.Transaction, error) {
+func BuildRewardTx(
+	lovelace int,
+	address string,
+) (*Transaction.Transaction, error) {
 	var err error
 	w := wallet.GetWallet()
 	if w == nil {
@@ -55,7 +58,7 @@ func BuildRewardTx(lovelace uint64, address string) (*Transaction.Transaction, e
 	apollob = apollob.
 		PayToAddressBech32(
 			address,
-			int(lovelace),
+			lovelace,
 		)
 	tx, err := apollob.Complete()
 	if err != nil {
@@ -213,7 +216,11 @@ func getCardanoMonitorUtxos(addr string) ([]UTxO.UTxO, error) {
 			return nil, fmt.Errorf("failed to marshal request: %w", err)
 		}
 
-		req, err := http.NewRequest("POST", fmt.Sprintf("%s/getUtxos", cfg.TxBuilder.CardanoMonitorUrl), bytes.NewBuffer(jsonData))
+		req, err := http.NewRequest(
+			http.MethodPost,
+			cfg.TxBuilder.CardanoMonitorUrl+"/getUtxos",
+			bytes.NewBuffer(jsonData),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -233,7 +240,11 @@ func getCardanoMonitorUtxos(addr string) ([]UTxO.UTxO, error) {
 
 		if resp.StatusCode != http.StatusOK {
 			resp.Body.Close()
-			return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+			return nil, fmt.Errorf(
+				"API request failed with status %d: %s",
+				resp.StatusCode,
+				string(body),
+			)
 		}
 
 		var apiResponse []CardanoMonitorUtxo
@@ -269,7 +280,10 @@ func convertCardanoMonitorUtxo(cmUtxo CardanoMonitorUtxo) (*UTxO.UTxO, error) {
 	var utxo UTxO.UTxO
 	txHex, err := hex.DecodeString(cmUtxo.TransactionHash)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode UTxO transaction hash: %w", err)
+		return nil, fmt.Errorf(
+			"failed to decode UTxO transaction hash: %w",
+			err,
+		)
 	}
 	utxo.Input = TransactionInput.TransactionInput{
 		TransactionId: txHex,
