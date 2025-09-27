@@ -162,9 +162,10 @@ func submitTxApi(txBytes []byte) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted {
+	if resp.StatusCode == http.StatusOK ||
+		resp.StatusCode == http.StatusAccepted {
 		// Log the transaction hash from the response body
-		slog.Info(fmt.Sprintf("transaction hash: %s", string(respBody)))
+		slog.Info("transaction hash: " + string(respBody))
 		return nil
 	} else {
 		return fmt.Errorf("failed to submit TX to API: %s: %d: %s", cfg.Submit.Url, resp.StatusCode, respBody)

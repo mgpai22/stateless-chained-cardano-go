@@ -30,13 +30,19 @@ func main() {
 	}
 
 	// Add flags for amount, address and config file
-	cmd.Flags().String("amount", "1000000", "Lovelace amount to send (default: 1,000,000)")
-	cmd.Flags().String("address", "", "Destination address (default: wallet payment address)")
+	cmd.Flags().
+		String("amount", "1000000", "Lovelace amount to send (default: 1,000,000)")
+	cmd.Flags().
+		String("address", "", "Destination address (default: wallet payment address)")
 	cmd.Flags().StringP("config", "c", "", "Path to YAML configuration file")
-	cmd.Flags().Bool("submit", false, "Submit the transaction to the network (default: false, dry-run mode)")
-	cmd.Flags().Int("repeat", 1, "Number of times to build (and submit if enabled) the transaction (default: 1)")
-	cmd.Flags().String("build-cooldown", "0ms", "Cooldown between transaction builds (e.g., 0ms, 500ms, 2s)")
-	cmd.Flags().String("log-file", "", "Path to log file (default: no file logging, stderr only)")
+	cmd.Flags().
+		Bool("submit", false, "Submit the transaction to the network (default: false, dry-run mode)")
+	cmd.Flags().
+		Int("repeat", 1, "Number of times to build (and submit if enabled) the transaction (default: 1)")
+	cmd.Flags().
+		String("build-cooldown", "0ms", "Cooldown between transaction builds (e.g., 0ms, 500ms, 2s)")
+	cmd.Flags().
+		String("log-file", "", "Path to log file (default: no file logging, stderr only)")
 
 	if err := cmd.Execute(); err != nil {
 		os.Exit(1)
@@ -51,7 +57,11 @@ func workshopRun(cmd *cobra.Command, args []string) {
 	var logger *slog.Logger
 	if logFilePath != "" {
 		// Log to both stderr and file
-		logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		logFile, err := os.OpenFile(
+			logFilePath,
+			os.O_CREATE|os.O_WRONLY|os.O_APPEND,
+			0o666,
+		)
 		if err != nil {
 			slog.Error(fmt.Sprintf("failed to open log file: %s", err))
 			os.Exit(1)
@@ -61,7 +71,7 @@ func workshopRun(cmd *cobra.Command, args []string) {
 		// Create a multi-writer that writes to both stderr and the log file
 		multiWriter := io.MultiWriter(os.Stderr, logFile)
 		logger = slog.New(slog.NewTextHandler(multiWriter, nil))
-		slog.Info(fmt.Sprintf("logging to file: %s", logFilePath))
+		slog.Info("logging to file: " + logFilePath)
 	} else {
 		// Log to stderr only
 		logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
@@ -76,7 +86,7 @@ func workshopRun(cmd *cobra.Command, args []string) {
 	if configPath != "" {
 		// Load from specified config file
 		_, err = config.LoadWithConfigFile(configPath)
-		slog.Info(fmt.Sprintf("loaded configuration from: %s", configPath))
+		slog.Info("loaded configuration from: " + configPath)
 	} else {
 		// Use default loading (checks for config.yaml or falls back to env vars)
 		_, err = config.Load()
@@ -116,9 +126,19 @@ func workshopRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	if amount < 1 {
+		slog.Error(
+			fmt.Sprintf("invalid amount '%s': less than 1 lovelace", amountStr),
+		)
+		os.Exit(1)
+	}
+
 	if repeatCount < 1 {
 		slog.Error(
-			fmt.Sprintf("repeat count must be at least 1 (got %d)", repeatCount),
+			fmt.Sprintf(
+				"repeat count must be at least 1 (got %d)",
+				repeatCount,
+			),
 		)
 		os.Exit(1)
 	}
@@ -126,14 +146,21 @@ func workshopRun(cmd *cobra.Command, args []string) {
 	buildCooldown, err := time.ParseDuration(buildCooldownStr)
 	if err != nil {
 		slog.Error(
-			fmt.Sprintf("invalid build cooldown '%s': %s", buildCooldownStr, err),
+			fmt.Sprintf(
+				"invalid build cooldown '%s': %s",
+				buildCooldownStr,
+				err,
+			),
 		)
 		os.Exit(1)
 	}
 
 	if buildCooldown < 0 {
 		slog.Error(
-			fmt.Sprintf("build cooldown must be non-negative (got %s)", buildCooldown),
+			fmt.Sprintf(
+				"build cooldown must be non-negative (got %s)",
+				buildCooldown,
+			),
 		)
 		os.Exit(1)
 	}
@@ -148,19 +175,27 @@ func workshopRun(cmd *cobra.Command, args []string) {
 	)
 
 	if !submit {
-		slog.Info("dry-run mode: transaction built but not submitted (use --submit to submit)")
+		slog.Info(
+			"dry-run mode: transaction built but not submitted (use --submit to submit)",
+		)
 	}
 
 	usedInputs := make(map[string]struct{})
 
 	for completed := 0; completed < repeatCount; completed++ {
 		iteration := completed + 1
-		slog.Info(fmt.Sprintf("building transaction %d of %d", iteration, repeatCount))
+		slog.Info(
+			fmt.Sprintf(
+				"building transaction %d of %d",
+				iteration,
+				repeatCount,
+			),
+		)
 
 		var txBytes []byte
 
 		for {
-			tx, buildErr := txbuilder.BuildRewardTx(uint64(amount), address)
+			tx, buildErr := txbuilder.BuildRewardTx(amount, address)
 			if buildErr != nil {
 				slog.Error(
 					fmt.Sprintf("failed to build reward tx: %s", buildErr),
@@ -176,7 +211,10 @@ func workshopRun(cmd *cobra.Command, args []string) {
 				os.Exit(1)
 			}
 
-			gouroborosDecodedTx, decodeErr := ledger.NewTransactionFromCbor(ledger.TxTypeConway, txBytes)
+			gouroborosDecodedTx, decodeErr := ledger.NewTransactionFromCbor(
+				ledger.TxTypeConway,
+				txBytes,
+			)
 
 			if decodeErr != nil {
 				slog.Error(
@@ -189,7 +227,11 @@ func workshopRun(cmd *cobra.Command, args []string) {
 			inputs := make([]string, 0, len(gouroborosDecodedTx.Inputs()))
 
 			for _, input := range gouroborosDecodedTx.Inputs() {
-				formatted := fmt.Sprintf("%s:%d", input.Id().String(), input.Index())
+				formatted := fmt.Sprintf(
+					"%s:%d",
+					input.Id().String(),
+					input.Index(),
+				)
 				if _, exists := usedInputs[formatted]; exists {
 					duplicateInputs = append(duplicateInputs, formatted)
 				}
@@ -198,10 +240,17 @@ func workshopRun(cmd *cobra.Command, args []string) {
 
 			if len(duplicateInputs) > 0 {
 				slog.Warn(
-					fmt.Sprintf("duplicate tx input found (iteration %d): %v", iteration, duplicateInputs),
+					fmt.Sprintf(
+						"duplicate tx input found (iteration %d): %v",
+						iteration,
+						duplicateInputs,
+					),
 				)
 				slog.Info(
-					fmt.Sprintf("retrying transaction build after %s due to duplicate inputs", duplicateInputRetryCooldown),
+					fmt.Sprintf(
+						"retrying transaction build after %s due to duplicate inputs",
+						duplicateInputRetryCooldown,
+					),
 				)
 				time.Sleep(duplicateInputRetryCooldown)
 				continue
@@ -221,21 +270,34 @@ func workshopRun(cmd *cobra.Command, args []string) {
 		if submit {
 			for {
 				slog.Info(
-					fmt.Sprintf("submitting transaction to network (iteration %d)...", iteration),
+					fmt.Sprintf(
+						"submitting transaction to network (iteration %d)...",
+						iteration,
+					),
 				)
 				err = txsubmit.SubmitTx(txBytes)
 				if err != nil {
 					slog.Warn(
-						fmt.Sprintf("failed to submit tx on iteration %d: %s", iteration, err),
+						fmt.Sprintf(
+							"failed to submit tx on iteration %d: %s",
+							iteration,
+							err,
+						),
 					)
 					slog.Info(
-						fmt.Sprintf("retrying transaction submission after %s", submissionRetryCooldown),
+						fmt.Sprintf(
+							"retrying transaction submission after %s",
+							submissionRetryCooldown,
+						),
 					)
 					time.Sleep(submissionRetryCooldown)
 					continue
 				}
 				slog.Info(
-					fmt.Sprintf("transaction submitted successfully (iteration %d)", iteration),
+					fmt.Sprintf(
+						"transaction submitted successfully (iteration %d)",
+						iteration,
+					),
 				)
 				break
 			}
@@ -247,7 +309,10 @@ func workshopRun(cmd *cobra.Command, args []string) {
 
 		if completed < repeatCount-1 && buildCooldown > 0 {
 			slog.Info(
-				fmt.Sprintf("waiting %s before next transaction build", buildCooldown),
+				fmt.Sprintf(
+					"waiting %s before next transaction build",
+					buildCooldown,
+				),
 			)
 			time.Sleep(buildCooldown)
 		}
