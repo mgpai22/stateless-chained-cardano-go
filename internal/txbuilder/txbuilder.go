@@ -253,7 +253,6 @@ func getCardanoMonitorUtxos(addr string) ([]UTxO.UTxO, error) {
 				resp.StatusCode,
 				string(body),
 			)
-
 		}
 
 		var apiResponse []CardanoMonitorUtxo
