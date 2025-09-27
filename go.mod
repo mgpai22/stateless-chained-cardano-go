@@ -1,4 +1,4 @@
-module github.com/blinklabs-io/buidler-fest-2024-workshop
+module github.com/zenGate-Global/stateless
 
 go 1.24.0
 

@@ -20,8 +20,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/blinklabs-io/buidler-fest-2024-workshop/internal/config"
 	"github.com/blinklabs-io/bursa"
+	"github.com/zenGate-Global/stateless/internal/config"
 )
 
 var globalWallet *bursa.Wallet

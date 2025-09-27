@@ -27,8 +27,8 @@ import (
 	"github.com/Salvionied/apollo/serialization/Value"
 	"github.com/Salvionied/apollo/txBuilding/Backend/BlockFrostChainContext"
 	"github.com/SundaeSwap-finance/kugo"
-	"github.com/blinklabs-io/buidler-fest-2024-workshop/internal/config"
-	"github.com/blinklabs-io/buidler-fest-2024-workshop/internal/wallet"
+	"github.com/zenGate-Global/stateless/internal/config"
+	"github.com/zenGate-Global/stateless/internal/wallet"
 )
 
 func BuildRewardTx(lovelace uint64, address string) (*Transaction.Transaction, error) {

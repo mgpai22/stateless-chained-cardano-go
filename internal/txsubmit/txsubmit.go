@@ -10,10 +10,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/blinklabs-io/buidler-fest-2024-workshop/internal/config"
 	ouroboros "github.com/blinklabs-io/gouroboros"
 	"github.com/blinklabs-io/gouroboros/ledger"
 	"github.com/blinklabs-io/gouroboros/protocol/txsubmission"
+	"github.com/zenGate-Global/stateless/internal/config"
 )
 
 var (
