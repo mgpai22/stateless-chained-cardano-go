@@ -8,12 +8,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/blinklabs-io/buidler-fest-2024-workshop/internal/config"
-	"github.com/blinklabs-io/buidler-fest-2024-workshop/internal/txbuilder"
-	"github.com/blinklabs-io/buidler-fest-2024-workshop/internal/txsubmit"
-	"github.com/blinklabs-io/buidler-fest-2024-workshop/internal/wallet"
 	"github.com/blinklabs-io/gouroboros/ledger"
 	"github.com/spf13/cobra"
+	"github.com/zenGate-Global/stateless/internal/config"
+	"github.com/zenGate-Global/stateless/internal/txbuilder"
+	"github.com/zenGate-Global/stateless/internal/txsubmit"
+	"github.com/zenGate-Global/stateless/internal/wallet"
 )
 
 const (
@@ -36,6 +36,7 @@ func main() {
 	cmd.Flags().Bool("submit", false, "Submit the transaction to the network (default: false, dry-run mode)")
 	cmd.Flags().Int("repeat", 1, "Number of times to build (and submit if enabled) the transaction (default: 1)")
 	cmd.Flags().String("build-cooldown", "0ms", "Cooldown between transaction builds (e.g., 0ms, 500ms, 2s)")
+	cmd.Flags().String("log-file", "", "Path to log file (default: no file logging, stderr only)")
 
 	if err := cmd.Execute(); err != nil {
 		os.Exit(1)
@@ -43,23 +44,35 @@ func main() {
 }
 
 func workshopRun(cmd *cobra.Command, args []string) {
-	// Configure logger with both stderr and file output
-	logFile, err := os.OpenFile("stateless.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		slog.Error(fmt.Sprintf("failed to open log file: %s", err))
-		os.Exit(1)
-	}
-	defer logFile.Close()
+	// Extract log file path from flags
+	logFilePath, _ := cmd.Flags().GetString("log-file")
 
-	// Create a multi-writer that writes to both stderr and the log file
-	multiWriter := io.MultiWriter(os.Stderr, logFile)
-	logger := slog.New(slog.NewTextHandler(multiWriter, nil))
+	// Configure logger with conditional file output
+	var logger *slog.Logger
+	if logFilePath != "" {
+		// Log to both stderr and file
+		logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			slog.Error(fmt.Sprintf("failed to open log file: %s", err))
+			os.Exit(1)
+		}
+		defer logFile.Close()
+
+		// Create a multi-writer that writes to both stderr and the log file
+		multiWriter := io.MultiWriter(os.Stderr, logFile)
+		logger = slog.New(slog.NewTextHandler(multiWriter, nil))
+		slog.Info(fmt.Sprintf("logging to file: %s", logFilePath))
+	} else {
+		// Log to stderr only
+		logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
+	}
 	slog.SetDefault(logger)
 
 	// Extract config file path from flags
 	configPath, _ := cmd.Flags().GetString("config")
 
 	// Load config
+	var err error
 	if configPath != "" {
 		// Load from specified config file
 		_, err = config.LoadWithConfigFile(configPath)
