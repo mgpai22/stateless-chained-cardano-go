@@ -236,7 +236,7 @@ func getCardanoMonitorUtxos(addr string) ([]UTxO.UTxO, error) {
 		}
 
 		if resp == nil {
-			return nil, fmt.Errorf("received nil response")
+			return nil, errors.New("received nil response")
 		}
 
 		defer resp.Body.Close()
@@ -253,7 +253,7 @@ func getCardanoMonitorUtxos(addr string) ([]UTxO.UTxO, error) {
 				resp.StatusCode,
 				string(body),
 			)
-			return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+
 		}
 
 		var apiResponse []CardanoMonitorUtxo
