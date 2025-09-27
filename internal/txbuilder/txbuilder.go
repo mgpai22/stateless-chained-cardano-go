@@ -222,27 +222,31 @@ func getCardanoMonitorUtxos(addr string) ([]UTxO.UTxO, error) {
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
+			if resp != nil && resp.Body != nil {
+				resp.Body.Close()
+			}
 			return nil, fmt.Errorf("failed to make request: %w", err)
 		}
 
+		if resp == nil {
+			return nil, fmt.Errorf("received nil response")
+		}
+
+		defer resp.Body.Close()
+
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			resp.Body.Close()
 			return nil, fmt.Errorf("failed to read response: %w", err)
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
 			return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 		}
 
 		var apiResponse []CardanoMonitorUtxo
 		if err := json.Unmarshal(body, &apiResponse); err != nil {
-			resp.Body.Close()
 			return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 		}
-
-		resp.Body.Close()
 
 		// Convert and add UTxOs from this batch
 		for _, cmUtxo := range apiResponse {
